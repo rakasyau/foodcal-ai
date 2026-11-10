@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FoodCal AI</string>
+    <string name="widget_4x2_label">FoodCal AI · Harian (4×2)</string>
+    <string name="widget_4x2_deskripsi">Pantau kalori hari ini, cincin target harian, dan buka kamera sekali ketuk.</string>
+    <string name="widget_2x2_label">FoodCal AI · Ringkas (2×2)</string>
+    <string name="widget_2x2_deskripsi">Kartu ringkas kalori hari ini dan persentase target harian.</string>
+    <string name="widget_cincin_desc">Kemajuan target kalori harian</string>
+    <string name="widget_kamera_desc">Buka kamera FoodCal AI</string>
+</resources>
+

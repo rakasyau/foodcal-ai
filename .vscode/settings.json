@@ -1,0 +1,24 @@
+{
+  "dart.flutterSdkPath": "C:\\Users\\rakas\\flutter-sdk\\flutter",
+  "dart.sdkPath": "C:\\Users\\rakas\\flutter-sdk\\flutter\\bin\\cache\\dart-sdk",
+  "dart.analysisExcludedFolders": [
+    ".dart_tool",
+    "build",
+    "dist",
+    "android",
+    "windows"
+  ],
+  "files.watcherExclude": {
+    "**/.dart_tool/**": true,
+    "**/build/**": true,
+    "**/dist/**": true,
+    "**/android/.gradle/**": true
+  },
+  "search.exclude": {
+    "**/.dart_tool": true,
+    "**/build": true,
+    "**/dist": true,
+    "**/android/.gradle": true
+  }
+}
+

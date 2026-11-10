@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Diperlukan oleh Flutter hanya pada mode debug agar Dart VM Service
+         dapat berkomunikasi dengan `flutter run` melalui localhost ADB.
+         Build rilis (src/main/AndroidManifest.xml) tetap tanpa izin INTERNET. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+</manifest>
