@@ -282,6 +282,7 @@ Aplikasi ini dilengkapi pengujian unit dan pengujian widget yang komprehensif:
 ## 📄 Lisensi
 
 Didistribusikan di bawah lisensi **MIT License**. Lihat berkas [LICENSE](LICENSE) untuk informasi lebih lanjut.
+Copyright Group 4.
 
 ---
 
