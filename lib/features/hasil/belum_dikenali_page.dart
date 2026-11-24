@@ -20,12 +20,16 @@ class BelumDikenaliPage extends StatelessWidget {
     required this.ambang,
     required this.foto,
     required this.sumberFoto,
+    this.bukanMakanan = false,
   });
 
   final double keyakinan;
   final double ambang;
   final Uint8List foto;
   final String sumberFoto;
+
+  /// Benar bila model yakin citra ini memang bukan makanan.
+  final bool bukanMakanan;
 
   Future<void> _pilihSendiri(BuildContext context) async {
     final dipilih = await Rute.buka<KelasMakanan>(
@@ -109,7 +113,7 @@ class BelumDikenaliPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'Makanan belum dikenali',
+                      bukanMakanan ? 'Ini bukan makanan' : 'Makanan belum dikenali',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'Poppins',
@@ -119,40 +123,53 @@ class BelumDikenaliPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text.rich(
-                      TextSpan(
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          height: 1.5,
-                          color: c.inkSoft,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                        children: [
-                          const TextSpan(text: 'Keyakinan model hanya '),
-                          TextSpan(
-                            text: formatPersen(keyakinan * 100),
+                    bukanMakanan
+                        ? Text(
+                            'Objek pada foto tidak dikenali sebagai makanan, '
+                            'jadi kalori tidak dihitung. Arahkan kamera ke piring '
+                            'makanan bila ingin mencatat asupan.',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: c.ink,
+                              fontFamily: 'Poppins',
+                              fontSize: 14,
+                              height: 1.5,
+                              color: c.inkSoft,
                             ),
-                          ),
-                          const TextSpan(text: ', di bawah ambang '),
-                          TextSpan(
-                            text: formatPersen(ambang * 100),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: c.ink,
+                          )
+                        : Text.rich(
+                            TextSpan(
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                height: 1.5,
+                                color: c.inkSoft,
+                                fontFeatures: const [FontFeature.tabularFigures()],
+                              ),
+                              children: [
+                                const TextSpan(text: 'Keyakinan model hanya '),
+                                TextSpan(
+                                  text: formatPersen(keyakinan * 100),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: c.ink,
+                                  ),
+                                ),
+                                const TextSpan(text: ', di bawah ambang '),
+                                TextSpan(
+                                  text: formatPersen(ambang * 100),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    color: c.ink,
+                                  ),
+                                ),
+                                const TextSpan(
+                                  text:
+                                      '. Coba foto dari atas piring dengan cahaya yang cukup.',
+                                ),
+                              ],
                             ),
+                            textAlign: TextAlign.center,
                           ),
-                          const TextSpan(
-                            text:
-                                '. Coba foto dari atas piring dengan cahaya yang cukup.',
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
                   ],
                 ),
               ),

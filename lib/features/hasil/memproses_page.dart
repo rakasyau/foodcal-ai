@@ -123,13 +123,14 @@ class _MemprosesPageState extends ConsumerState<MemprosesPage>
                   namaModel: pengaturan.modelAktif,
                   sumberFoto: widget.sumberFoto,
                 );
-            // Abaikan potongan yang keyakinannya terlalu lemah (kemungkinan bukan makanan).
-            if (hasil.keyakinan >= 0.25) {
+            // Abaikan potongan yang keyakinannya terlalu lemah atau yang dinilai bukan makanan.
+            if (!hasil.bukanMakanan && hasil.keyakinan >= 0.25) {
               hasilSementara[idx] = ItemPiring(
                 kelas: hasil.kelas,
                 keyakinan: hasil.keyakinan,
                 porsiG: porsiAwal(hasil.kelas),
                 kelasPrediksiId: hasil.kelas.id,
+                kotak: kandidat[idx].kotak,
               );
             }
           } catch (_) {
@@ -167,6 +168,10 @@ class _MemprosesPageState extends ConsumerState<MemprosesPage>
               items: items,
               sumberFoto: widget.sumberFoto,
               ambang: pengaturan.ambangKeyakinan,
+              ukuranFoto: (
+                lebar: deteksi.lebarCitra,
+                tinggi: deteksi.tinggiCitra,
+              ),
             ),
           );
           return;
@@ -183,7 +188,7 @@ class _MemprosesPageState extends ConsumerState<MemprosesPage>
             sumberFoto: widget.sumberFoto,
           );
       if (_batal || !mounted) return;
-      if (hasil.keyakinan < pengaturan.ambangKeyakinan) {
+      if (hasil.bukanMakanan || hasil.keyakinan < pengaturan.ambangKeyakinan) {
         await Rute.ganti(
           context,
           BelumDikenaliPage(
@@ -191,6 +196,7 @@ class _MemprosesPageState extends ConsumerState<MemprosesPage>
             ambang: pengaturan.ambangKeyakinan,
             foto: widget.foto,
             sumberFoto: widget.sumberFoto,
+            bukanMakanan: hasil.bukanMakanan,
           ),
         );
       } else {
@@ -216,6 +222,7 @@ class _MemprosesPageState extends ConsumerState<MemprosesPage>
           keyakinan: kotak.skor,
           porsiG: porsiAwal(k),
           kelasPrediksiId: k.id,
+          kotak: kotak.kotak,
         );
       }
     }

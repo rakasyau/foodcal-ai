@@ -9,12 +9,15 @@ import '../../app/theme.dart';
 import '../../core/formatter.dart';
 import '../../domain/kalkulator_gizi.dart';
 import '../../domain/model.dart';
+import '../../services/deteksi_service.dart';
+import '../../services/potong_citra.dart';
 import '../../widgets/ikon_svg.dart';
 import '../../widgets/pemilih_porsi.dart';
 import '../../widgets/tombol.dart';
 import '../catatan/catatan_harian_page.dart';
 import '../hasil/pilih_makanan_page.dart';
 import '../kamera/kamera_page.dart';
+import 'pratinjau_deteksi.dart';
 
 /// Satu makanan yang ditemukan pada satu foto.
 class ItemPiring {
@@ -23,6 +26,7 @@ class ItemPiring {
     required this.keyakinan,
     required this.porsiG,
     this.kelasPrediksiId,
+    this.kotak,
   });
 
   KelasMakanan kelas;
@@ -32,6 +36,9 @@ class ItemPiring {
   /// Kelas yang ditebak model untuk item ini. Null bila item ditambahkan
   /// atau dipilih sendiri oleh pengguna, tanpa tebakan model.
   final int? kelasPrediksiId;
+
+  /// Wilayah kotak deteksi YOLO pada koordinat citra asli, jika berasal dari detektor.
+  KotakPiksel? kotak;
 
   bool get dipilihManual => kelasPrediksiId == null;
 
@@ -49,6 +56,7 @@ class ItemPiring {
     keyakinan: keyakinan,
     porsiG: porsiG,
     kelasPrediksiId: kelasPrediksiId,
+    kotak: kotak,
   );
 }
 
@@ -62,6 +70,9 @@ List<ItemPiring> gabungkanItemPiringUnik(Iterable<ItemPiring> masukan) {
       peta[item.kelas.id] = item.salin();
     } else if (item.keyakinan > ada.keyakinan) {
       ada.keyakinan = item.keyakinan;
+      ada.kotak = item.kotak ?? ada.kotak;
+    } else {
+      ada.kotak ??= item.kotak;
     }
   }
   return peta.values.toList(growable: false);
@@ -75,6 +86,7 @@ class PiringPage extends ConsumerStatefulWidget {
     required this.items,
     this.sumberFoto = 'kamera',
     this.ambang = 0.60,
+    this.ukuranFoto,
   });
 
   final Uint8List foto;
@@ -86,6 +98,9 @@ class PiringPage extends ConsumerStatefulWidget {
   /// Ambang keyakinan; item tebakan di bawahnya ditandai perlu dicek.
   final double ambang;
 
+  /// Ukuran foto asli setelah orientasi EXIF, untuk memetakan kotak YOLO.
+  final ({int lebar, int tinggi})? ukuranFoto;
+
   @override
   ConsumerState<PiringPage> createState() => _PiringPageState();
 }
@@ -94,8 +109,24 @@ class _PiringPageState extends ConsumerState<PiringPage> {
   late List<ItemPiring> _items = [
     for (final item in widget.items) item.salin(),
   ];
+  late ({int lebar, int tinggi})? _ukuranFoto = widget.ukuranFoto;
+  bool _tampilkanKotak = true;
   bool _menyimpan = false;
   bool _tersimpan = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_ukuranFoto == null && _items.any((item) => item.kotak != null)) {
+      _ukuranFoto = ukuranCitra(widget.foto);
+    }
+  }
+
+  bool get _adaKotakYolo =>
+      _ukuranFoto != null &&
+      _ukuranFoto!.lebar > 0 &&
+      _ukuranFoto!.tinggi > 0 &&
+      _items.any((item) => item.kotak != null);
 
   Future<double> _porsiTersimpanAtauAwal(KelasMakanan kelas) async {
     try {
@@ -167,11 +198,7 @@ class _PiringPageState extends ConsumerState<PiringPage> {
     setState(() {
       _items = [
         ..._items,
-        ItemPiring(
-          kelas: nasiTerpilih,
-          keyakinan: 0,
-          porsiG: porsi,
-        ),
+        ItemPiring(kelas: nasiTerpilih, keyakinan: 0, porsiG: porsi),
       ];
     });
   }
@@ -188,11 +215,7 @@ class _PiringPageState extends ConsumerState<PiringPage> {
     setState(() {
       _items = [
         ..._items,
-        ItemPiring(
-          kelas: dipilih,
-          keyakinan: 0,
-          porsiG: porsi,
-        ),
+        ItemPiring(kelas: dipilih, keyakinan: 0, porsiG: porsi),
       ];
     });
   }
@@ -231,8 +254,8 @@ class _PiringPageState extends ConsumerState<PiringPage> {
       await repositori.log.simpanBanyak(daftar);
       await repositori.pengaturan.setBanyak({
         for (final item in _items)
-          KunciPengaturan.porsiKelas(item.kelas.id):
-              item.porsiG.toStringAsFixed(0),
+          KunciPengaturan.porsiKelas(item.kelas.id): item.porsiG
+              .toStringAsFixed(0),
       });
       if (!mounted) return;
       segarkanCatatan(ref);
@@ -247,10 +270,7 @@ class _PiringPageState extends ConsumerState<PiringPage> {
             label: 'Lihat Catatan',
             onPressed: () {
               if (!navigator.mounted) return;
-              Rute.hapusSampaiAwal<void>(
-                navigator,
-                const CatatanHarianPage(),
-              );
+              Rute.hapusSampaiAwal<void>(navigator, const CatatanHarianPage());
             },
           ),
         ),
@@ -267,6 +287,28 @@ class _PiringPageState extends ConsumerState<PiringPage> {
   @override
   Widget build(BuildContext context) {
     final c = context.warna;
+    final adaKotak = _adaKotakYolo;
+    final warnaPerItem = <ItemPiring, Color>{};
+    final kotakTampil = <WilayahKotakTampil>[];
+    if (adaKotak) {
+      var urutanWarna = 0;
+      for (final item in _items) {
+        final k = item.kotak;
+        if (k == null) continue;
+        final warna = warnaUntukIndeksDeteksi(urutanWarna++);
+        warnaPerItem[item] = warna;
+        final label = item.dikoreksi || item.dipilihManual
+            ? item.kelas.namaId
+            : '${item.kelas.namaId} · ${formatPersen(item.keyakinan * 100)}';
+        kotakTampil.add(
+          WilayahKotakTampil(kotak: k, label: label, warna: warna),
+        );
+      }
+    }
+    final ukuranCitra = adaKotak
+        ? Size(_ukuranFoto!.lebar.toDouble(), _ukuranFoto!.tinggi.toDouble())
+        : Size.zero;
+
     return Scaffold(
       backgroundColor: c.bg,
       body: SafeArea(
@@ -277,7 +319,7 @@ class _PiringPageState extends ConsumerState<PiringPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: SizedBox(
-                height: 220,
+                height: adaKotak ? 264 : 220,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
@@ -287,49 +329,115 @@ class _PiringPageState extends ConsumerState<PiringPage> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          Image.memory(
-                            widget.foto,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            errorBuilder: (_, _, _) =>
-                                Container(color: c.surfaceAlt),
-                          ),
-                          Container(
-                            color: Colors.black.withValues(alpha: 0.16),
-                          ),
-                          Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: c.surface.withValues(alpha: 0.82),
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.pill,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                          if (adaKotak) ...[
+                            Container(
+                              color: context.modeGelap
+                                  ? const Color(0xFF141414)
+                                  : const Color(0xFF1E1E1E),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 24),
+                              child: Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  IkonGaris(
-                                    JenisIkon.mangkuk,
-                                    ukuran: 18,
-                                    warna: c.inkSoft,
+                                  Image.memory(
+                                    widget.foto,
+                                    fit: BoxFit.contain,
+                                    gaplessPlayback: true,
+                                    errorBuilder: (_, _, _) =>
+                                        Container(color: c.surfaceAlt),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Pratinjau foto (tidak disimpan)',
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 12,
-                                      color: c.inkSoft,
+                                  if (_tampilkanKotak)
+                                    OverlayKotakDeteksi(
+                                      ukuranCitra: ukuranCitra,
+                                      daftarKotak: kotakTampil,
+                                      fit: BoxFit.contain,
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
-                          ),
+                            Positioned(
+                              left: 12,
+                              bottom: 32,
+                              child: IgnorePointer(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: c.surface.withValues(alpha: 0.82),
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.pill,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IkonGaris(
+                                        JenisIkon.mangkuk,
+                                        ukuran: 14,
+                                        warna: c.inkSoft,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Pratinjau foto (tidak disimpan)',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 10,
+                                          color: c.inkSoft,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            Image.memory(
+                              widget.foto,
+                              fit: BoxFit.cover,
+                              gaplessPlayback: true,
+                              errorBuilder: (_, _, _) =>
+                                  Container(color: c.surfaceAlt),
+                            ),
+                            Container(
+                              color: Colors.black.withValues(alpha: 0.16),
+                            ),
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: c.surface.withValues(alpha: 0.82),
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.pill,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IkonGaris(
+                                      JenisIkon.mangkuk,
+                                      ukuran: 18,
+                                      warna: c.inkSoft,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Pratinjau foto (tidak disimpan)',
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 12,
+                                        color: c.inkSoft,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -344,6 +452,17 @@ class _PiringPageState extends ConsumerState<PiringPage> {
                         onPressed: () => Navigator.of(context).maybePop(),
                       ),
                     ),
+                    if (adaKotak)
+                      Positioned(
+                        top: 12,
+                        right: 12,
+                        child: _TombolToggleKotak(
+                          aktif: _tampilkanKotak,
+                          onTap: () => setState(
+                            () => _tampilkanKotak = !_tampilkanKotak,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -437,6 +556,9 @@ class _PiringPageState extends ConsumerState<PiringPage> {
                                 item: item,
                                 ambang: widget.ambang,
                                 terkunci: _tersimpan,
+                                warnaKotak: _tampilkanKotak
+                                    ? warnaPerItem[item]
+                                    : null,
                                 onPorsi: () => _ubahPorsi(item),
                                 onGanti: () => _gantiKelas(item),
                                 onHapus: (!_tersimpan && _items.length > 1)
@@ -464,12 +586,14 @@ class _PiringPageState extends ConsumerState<PiringPage> {
                           ),
                           _TotalKolom(
                             label: 'Protein',
-                            nilai: '${tampilkanMakro(_total((g) => g.proteinG))} g',
+                            nilai:
+                                '${tampilkanMakro(_total((g) => g.proteinG))} g',
                             terang: false,
                           ),
                           _TotalKolom(
                             label: 'Lemak',
-                            nilai: '${tampilkanMakro(_total((g) => g.lemakG))} g',
+                            nilai:
+                                '${tampilkanMakro(_total((g) => g.lemakG))} g',
                             terang: false,
                           ),
                           _TotalKolom(
@@ -504,6 +628,64 @@ class _PiringPageState extends ConsumerState<PiringPage> {
 
 typedef FungsiNilai = double Function(NilaiGizi);
 
+class _TombolToggleKotak extends StatelessWidget {
+  const _TombolToggleKotak({required this.aktif, required this.onTap});
+
+  final bool aktif;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.warna;
+    final latar = aktif ? c.ink : c.surface.withValues(alpha: 0.90);
+    final depan = aktif ? c.bg : c.ink;
+    return Semantics(
+      button: true,
+      toggled: aktif,
+      excludeSemantics: true,
+      label: aktif ? 'Sembunyikan kotak YOLO' : 'Tampilkan kotak YOLO',
+      child: Material(
+        color: latar,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.pill),
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+              border: Border.all(color: aktif ? c.ink : c.line),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  aktif
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 16,
+                  color: depan,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Kotak YOLO',
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: depan,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BarisItem extends StatelessWidget {
   const _BarisItem({
     required this.item,
@@ -511,12 +693,14 @@ class _BarisItem extends StatelessWidget {
     required this.terkunci,
     required this.onPorsi,
     required this.onGanti,
+    this.warnaKotak,
     this.onHapus,
   });
 
   final ItemPiring item;
   final double ambang;
   final bool terkunci;
+  final Color? warnaKotak;
   final VoidCallback onPorsi;
   final VoidCallback onGanti;
   final VoidCallback? onHapus;
@@ -550,14 +734,31 @@ class _BarisItem extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.kelas.namaId,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: c.ink,
-                      ),
+                    Row(
+                      children: [
+                        if (warnaKotak != null) ...[
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: BoxDecoration(
+                              color: warnaKotak,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 7),
+                        ],
+                        Expanded(
+                          child: Text(
+                            item.kelas.namaId,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: c.ink,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -565,8 +766,9 @@ class _BarisItem extends StatelessWidget {
                       style: TextStyle(
                         fontFamily: 'Poppins',
                         fontSize: 11,
-                        fontWeight:
-                            perluDicek ? FontWeight.w500 : FontWeight.w400,
+                        fontWeight: perluDicek
+                            ? FontWeight.w500
+                            : FontWeight.w400,
                         color: perluDicek ? c.accent : c.inkSoft,
                       ),
                     ),
@@ -598,10 +800,7 @@ class _BarisItem extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              _PilKecil(
-                label: 'Atur porsi',
-                onTap: terkunci ? null : onPorsi,
-              ),
+              _PilKecil(label: 'Atur porsi', onTap: terkunci ? null : onPorsi),
               const SizedBox(width: 8),
               _PilKecil(
                 label: 'Ganti makanan',
@@ -668,11 +867,7 @@ class _TotalKolom extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 10,
-            color: warna,
-          ),
+          style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: warna),
         ),
         const SizedBox(height: 2),
         Text(

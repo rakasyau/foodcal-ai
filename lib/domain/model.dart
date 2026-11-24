@@ -210,6 +210,7 @@ class HasilPrediksi {
     required this.sumberFoto,
     this.kandidat = const <KandidatPrediksi>[],
     this.dipilihManual = false,
+    this.bukanMakanan = false,
   });
 
   final KelasMakanan kelas;
@@ -222,10 +223,14 @@ class HasilPrediksi {
   /// Benar bila pengguna memilih kelas sendiri, bukan hasil tebakan model.
   final bool dipilihManual;
 
+  /// Benar bila model menyimpulkan citra bukan makanan (kelas penolakan menang).
+  final bool bukanMakanan;
+
   HasilPrediksi salinDengan({
     KelasMakanan? kelas,
     double? keyakinan,
     bool? dipilihManual,
+    bool? bukanMakanan,
   }) {
     return HasilPrediksi(
       kelas: kelas ?? this.kelas,
@@ -233,6 +238,7 @@ class HasilPrediksi {
       sumberFoto: sumberFoto,
       kandidat: kandidat,
       dipilihManual: dipilihManual ?? this.dipilihManual,
+      bukanMakanan: bukanMakanan ?? this.bukanMakanan,
     );
   }
 }

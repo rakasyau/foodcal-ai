@@ -17,8 +17,10 @@ import 'package:foodcal_ai/features/kamera/izin_kamera_page.dart';
 import 'package:foodcal_ai/features/onboarding/onboarding_page.dart';
 import 'package:foodcal_ai/features/pengaturan/pengaturan_page.dart';
 import 'package:foodcal_ai/features/piring/piring_page.dart';
+import 'package:foodcal_ai/features/piring/pratinjau_deteksi.dart';
 import 'package:foodcal_ai/features/profil/profil_page.dart';
 import 'package:foodcal_ai/features/profil/widget_layar_utama_page.dart';
+import 'package:foodcal_ai/services/deteksi_service.dart';
 import 'package:foodcal_ai/services/widget_layar_utama_service.dart';
 import 'package:foodcal_ai/widgets/baris_entri.dart';
 import 'package:foodcal_ai/widgets/cincin_kemajuan.dart';
@@ -465,6 +467,90 @@ void main() {
     expect(find.text('45% yakin · perlu dicek · 100 g'), findsOneWidget);
     expect(find.text('dipilih manual · 50 g'), findsOneWidget);
     expect(find.text('Foto Ulang'), findsOneWidget);
+    expect(find.text('Kotak YOLO'), findsNothing);
+    expect(find.byType(OverlayKotakDeteksi), findsNothing);
+  });
+
+  testWidgets('halaman piring menampilkan kotak YOLO dan tombol toggle berfungsi', (
+    tester,
+  ) async {
+    const ayam = KelasMakanan(
+      id: 0,
+      kode: 'ayam_goreng',
+      namaId: 'Ayam Goreng',
+      namaEn: 'Fried Chicken',
+      kelompok: 'Indonesia',
+      kkal100g: 283.4,
+      protein100g: 35.4,
+      lemak100g: 14.2,
+      kh100g: 0.9,
+      serat100g: 0,
+      porsiRefG: 150,
+      gramPerCm2: null,
+      sumber: 'TKPI',
+    );
+    const nasi = KelasMakanan(
+      id: 32,
+      kode: 'nasi_putih',
+      namaId: 'Nasi Putih',
+      namaEn: 'Steamed White Rice',
+      kelompok: 'Indonesia',
+      kkal100g: 180,
+      protein100g: 3,
+      lemak100g: 0.3,
+      kh100g: 39.8,
+      serat100g: 0.2,
+      porsiRefG: 150,
+      gramPerCm2: null,
+      sumber: 'TKPI',
+    );
+    final items = [
+      ItemPiring(
+        kelas: ayam,
+        keyakinan: 0.87,
+        porsiG: 150,
+        kelasPrediksiId: 0,
+        kotak: const KotakPiksel(40, 40, 220, 220),
+      ),
+      ItemPiring(
+        kelas: nasi,
+        keyakinan: 0.91,
+        porsiG: 150,
+        kelasPrediksiId: 32,
+        kotak: const KotakPiksel(240, 60, 440, 300),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: AppTema.terang(),
+          home: PiringPage(
+            foto: _buatPngUji(),
+            items: items,
+            sumberFoto: 'kamera',
+            ambang: 0.60,
+            ukuranFoto: (lebar: 480, tinggi: 360),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Kotak YOLO'), findsOneWidget);
+    expect(find.byType(OverlayKotakDeteksi), findsOneWidget);
+    expect(find.bySemanticsLabel('Sembunyikan kotak YOLO'), findsOneWidget);
+
+    await tester.tap(find.text('Kotak YOLO'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OverlayKotakDeteksi), findsNothing);
+    expect(find.bySemanticsLabel('Tampilkan kotak YOLO'), findsOneWidget);
+
+    await tester.tap(find.text('Kotak YOLO'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OverlayKotakDeteksi), findsOneWidget);
   });
 
   testWidgets('grafik 7 hari menampilkan jumlah penuh rentang dan tombol Catat', (

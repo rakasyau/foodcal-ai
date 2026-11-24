@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 
+import '../domain/kelas_tolak.dart';
 import '../domain/model.dart';
 import 'praproses.dart';
 
@@ -131,10 +132,10 @@ class InferensiService {
       ),
     );
 
-    final urutan = List<int>.generate(probabilitas.length, (i) => i)
-      ..sort((a, b) => probabilitas[b].compareTo(probabilitas[a]));
-    final indeksTerbaik = urutan.isEmpty ? 0 : urutan.first;
-    final nilaiTerbaik = probabilitas.isEmpty ? 0.0 : probabilitas[indeksTerbaik];
+    // Model 34 kelas menambahkan satu kelas penolakan di indeks terakhir, yaitu
+    // "bukan makanan". Kelas itu tidak ada di tabel kelas_makanan, jadi dipisahkan
+    // lebih dulu sebelum indeks lain dipetakan ke basis data.
+    final pisah = pisahkanKelasTolak(probabilitas, kelas.length);
 
     KelasMakanan kelasUntuk(int indeks) {
       for (final item in kelas) {
@@ -144,7 +145,7 @@ class InferensiService {
     }
 
     final kandidat = <KandidatPrediksi>[
-      for (final indeks in urutan.take(5))
+      for (final indeks in pisah.urutanMakanan.take(5))
         KandidatPrediksi(
           kelas: kelasUntuk(indeks),
           probabilitas: probabilitas[indeks],
@@ -152,10 +153,11 @@ class InferensiService {
     ];
 
     return HasilPrediksi(
-      kelas: kelasUntuk(indeksTerbaik),
-      keyakinan: nilaiTerbaik,
+      kelas: kelasUntuk(pisah.indeksMakananTerbaik),
+      keyakinan: pisah.bukanMakanan ? pisah.probabilitasTolak : pisah.keyakinanMakanan,
       sumberFoto: sumberFoto,
       kandidat: kandidat,
+      bukanMakanan: pisah.bukanMakanan,
     );
   }
 

@@ -1,11 +1,13 @@
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foodcal_ai/core/formatter.dart';
 import 'package:foodcal_ai/domain/kalkulator_gizi.dart';
 import 'package:foodcal_ai/domain/model.dart';
 import 'package:foodcal_ai/domain/rekap.dart';
 import 'package:foodcal_ai/features/piring/piring_page.dart';
+import 'package:foodcal_ai/features/piring/pratinjau_deteksi.dart';
 import 'package:foodcal_ai/services/deteksi_service.dart';
 import 'package:foodcal_ai/services/potong_citra.dart';
 import 'package:image/image.dart' as img;
@@ -260,18 +262,22 @@ void main() {
     });
 
     test('gabungkanItemPiringUnik menggabungkan kelas duplikat dengan keyakinan tertinggi', () {
+      const kotakRendah = KotakPiksel(10, 10, 100, 100);
+      const kotakTinggi = KotakPiksel(120, 40, 320, 260);
       final digabung = gabungkanItemPiringUnik([
         ItemPiring(
           kelas: _kelas(),
           keyakinan: 0.62,
           porsiG: 250,
           kelasPrediksiId: 16,
+          kotak: kotakRendah,
         ),
         ItemPiring(
           kelas: _kelas(),
           keyakinan: 0.89,
           porsiG: 250,
           kelasPrediksiId: 16,
+          kotak: kotakTinggi,
         ),
         ItemPiring(
           kelas: _telurDadar(),
@@ -283,7 +289,38 @@ void main() {
       expect(digabung.length, 2);
       expect(digabung.first.kelas.id, 16);
       expect(digabung.first.keyakinan, closeTo(0.89, 0.0001));
+      expect(digabung.first.kotak, same(kotakTinggi));
       expect(digabung.last.kelas.id, 31);
+    });
+
+    test('petakanKotakKeKanvas memetakan koordinat piksel sesuai BoxFit.contain dan BoxFit.cover', () {
+      const kotak = KotakPiksel(100, 200, 500, 600);
+      const citra = Size(1000, 1000);
+      const kanvas = Size(400, 200);
+
+      // Contain: skala = 200 / 1000 = 0.2, dx = (400 - 200) / 2 = 100, dy = 0
+      final contain = petakanKotakKeKanvas(
+        kotak: kotak,
+        ukuranCitra: citra,
+        ukuranKanvas: kanvas,
+        fit: BoxFit.contain,
+      );
+      expect(contain.left, closeTo(120, 0.001));
+      expect(contain.top, closeTo(40, 0.001));
+      expect(contain.right, closeTo(200, 0.001));
+      expect(contain.bottom, closeTo(120, 0.001));
+
+      // Cover: skala = 400 / 1000 = 0.4, dx = 0, dy = (200 - 400) / 2 = -100
+      final cover = petakanKotakKeKanvas(
+        kotak: kotak,
+        ukuranCitra: citra,
+        ukuranKanvas: kanvas,
+        fit: BoxFit.cover,
+      );
+      expect(cover.left, closeTo(40, 0.001));
+      expect(cover.top, closeTo(-20, 0.001));
+      expect(cover.right, closeTo(200, 0.001));
+      expect(cover.bottom, closeTo(140, 0.001));
     });
   });
 }
