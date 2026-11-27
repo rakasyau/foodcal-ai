@@ -20,6 +20,12 @@
 
 ---
 
+## 🎬 Demo aplikasi
+
+[![Buka video simulasi FoodCal AI dari kamera hingga Catatan Harian](docs/demo/foodcal-ai.jpg)](docs/demo/foodcal-ai.mp4)
+
+[Tonton simulasi (MP4, 22 detik)](docs/demo/foodcal-ai.mp4). Saat porsi nasi putih diubah dari 150 g menjadi 75 g, estimasi sepiring nasi dan ayam goreng turun dari 695 menjadi 560 kkal. Kedua makanan lalu disimpan ke Catatan Harian.
+
 ## 📖 Tentang FoodCal AI
 
 **FoodCal AI** adalah aplikasi Android pelacak nutrisi harian yang memanfaatkan kecerdasan buatan (*Edge AI*) langsung di ponsel pengguna. Berbeda dengan aplikasi pelacak kalori konvensional yang mengunggah foto makanan ke peladen awan (*cloud*), FoodCal AI menjalankan seluruh rangkaian inferensi visi komputer—mulai dari deteksi wilayah piring, klasifikasi makanan nusantara, hingga kalkulasi makronutrisi—secara **sepenuhnya luring (*offline*)**.
